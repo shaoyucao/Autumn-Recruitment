@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans 
+       	                   http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+	<bean id="personId" class="com.syc.f_xml.b_setter.Person">
+		<property name="name" value="Jack"></property>
+		<property name="age" value="18"></property>
+		
+		<property name="homeAddr" ref="homeAddrId"></property>
+		<property name="companyAddr">
+			<ref bean="companyAddrId"/>
+		</property>
+	</bean>
+	
+	<bean id="homeAddrId" class="com.syc.f_xml.b_setter.Address">
+		<property name="addr" value="浙江"></property>
+		<property name="tel" value="119"></property>
+	</bean>
+	<bean id="companyAddrId" class="com.syc.f_xml.b_setter.Address">
+		<property name="addr" value="杭州"></property>
+		<property name="tel" value="911"></property>
+	</bean>
+
+</beans>

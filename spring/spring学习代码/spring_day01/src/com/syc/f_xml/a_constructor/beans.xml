@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans 
+       	                   http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+<!-- 构造方法注入
+	* <constructor-arg> 用于配置构造方法一个参数argument
+	通过属性名的形式来设置一般是不用的
+	<constructor-arg name="username" value="syc"></constructor-arg>
+	<constructor-arg name="age" value="11"></constructor-arg>
+	
+	index：参数的索引号，从零开始，如果只有索引，匹配到了多个构造方法时，默认使用第一个
+	type：确定参数类型
+
+ -->
+<bean id="userId" class="com.syc.f_xml.a_constructor.User">
+	<constructor-arg index="0" type="java.lang.String" value="11"></constructor-arg>
+	<constructor-arg index="1" type="java.lang.Integer" value="12"></constructor-arg>
+</bean>
+
+</beans>

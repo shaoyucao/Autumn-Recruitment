@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans 
+       	                   http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+	<!-- 
+		集合的注入都是给<property>添加子标签:
+		
+		数组：<array>
+		List：<list>
+		Set：<set>
+		Map：<map> ，map存放k/v 键值对，使用<entry>描述
+		Properties：<props>  <prop key=""></prop>  【】
+		
+	 -->
+	<bean id="collDataId" class="com.syc.f_xml.e_coll.CollData">
+		<property name="arrayData">
+			<array>
+				<value>Tom</value>
+				<value>Bob</value>
+			</array>
+		</property>
+		
+		<property name="listData">
+			<list>
+				<value>李友良</value>
+				<value>张三强</value>
+				<value>谢兰婷</value>
+			</list>
+		</property>
+		
+		<property name="setData">
+			<set>
+				<value>谢霆锋</value>
+				<value>苏有朋</value>
+				<value>古巨基</value>
+			</set>
+		</property>
+		
+		<property name="mapData">
+			<map>
+				<entry key="Tom" value="汤姆"></entry>
+				<entry key="Jack" value="杰克"></entry>
+				<entry>
+					<key><value>rose</value></key>
+					<value>柔丝</value>
+				</entry>
+			</map>
+		</property>
+		
+		<property name="propsData">
+			<props>
+				<prop key="1">第一名</prop>
+				<prop key="2">第二名</prop>
+			</props>
+		</property>
+	</bean>
+
+</beans>

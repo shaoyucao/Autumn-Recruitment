@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans 
+       	                   http://www.springframework.org/schema/beans/spring-beans.xsd
+       	                   http://www.springframework.org/schema/aop 
+       	                   http://www.springframework.org/schema/aop/spring-aop.xsd
+       	                   http://www.springframework.org/schema/context 
+       					   http://www.springframework.org/schema/context/spring-context.xsd">
+	
+	<!-- 加载配置文件
+		"classpath:"前缀表示src下
+		在配置文件之后通过${key}获得内容
+	 -->
+	 <context:property-placeholder location="classpath:com/syc/f_properties/jdbcInfo.properties"/>
+	<!-- 创建数据源 -->
+	<bean id="dataSourceId" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+		<property name="driverClass" value="${jdbc.driverClass}"></property>
+		<property name="jdbcUrl" value="${jdbc.jdbcUrl}"></property>
+		<property name="user" value="${jdbc.user}"></property>
+		<property name="password" value="${jdbc.password}"></property>
+	</bean>
+	
+	<!-- 配置Dao，集成JdbcDaoSupport，不需要配置模板，底层自动创建模板-->
+	<bean id="userDaoId" class="com.syc.f_properties.UserDao">
+		<property name="dataSource" ref="dataSourceId"></property>
+	</bean>
+</beans>
