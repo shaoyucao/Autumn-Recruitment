@@ -243,7 +243,7 @@ public class RequestMappingTest {
 }
 ```
 
-小结：ant风格的url，在能够满足精确匹配的情况下，优先考虑精确匹配
+小结：ant风格的url，**在能够满足精确匹配的情况下，优先考虑精确匹配**
 
 ### 5.使用@PathVariable获取路径上的占位符
 
@@ -259,6 +259,35 @@ public class RequestMappingTest {
 如访问：http://localhost:8080/01_springmvc_helloworld/user/syc
 
 输出： 路径上的占位符为：syc
+
+### 6.对比@RequestParam和@PathVariable两个注解
+
+@RequestParam获取请求参数
+
+```java
+    @RequestMapping(value = "/index2")
+    public String index2(@RequestParam(value = "a") String a, Model model) {
+        model.addAttribute("result", "index2" + a);
+        return "result";
+    }
+```
+
+在上面的请求中，a获取index2后的a的参数，即http://localhost:8080/01_springmvc_helloworld/index2?a=syc
+
+@PathVariable获取路径上的占位符
+
+```java
+	//路径上可以有占位符，占位符的语法就是可以在任意路径的地方写一个{变量名}
+	@RequestMapping("/user/{pwdd}")
+	public String pathVariableTest(@PathVariable("pwdd")String pwd) {
+		System.out.println("路径上的占位符为：" + pwd);
+		return "success";
+	}
+```
+
+访问：http://localhost:8080/01_springmvc_helloworld/user/syc
+
+输出路径上的占位符为：syc
 
 ## 三、Rest风格的URL地址（get, post, put, delete)
 
@@ -385,6 +414,8 @@ public class BookController {
 输出：
 
 ![image-20200627213230156](Spring mvc.assets/image-20200627213230156.png)
+
+点击删除图书，因为方法为delete，所以用请求的DELETE方法进行响应。
 
 ### 源码分析
 
@@ -1707,7 +1738,7 @@ public class EmployeeController {
 
 **处理响应**
 
-将查询出来的所有员工添加到请求域
+点击页面上的“添加员工”后，处理“toaddpage”请求，并将查询出来的所有员工部门添加到请求域
 
 ```java
 @RequestMapping("/toaddpage")
@@ -1751,6 +1782,8 @@ public class EmployeeController {
 </html>
 ```
 
+上面这种方式比较麻烦，取值的时候需要从${}中取，下面介绍的表单标签技术能够简化操作。
+
 #### 表单标签技术
 
 通过SpringMVC的表单标签可以实现将模型数据中的属性和HTML表单元素相绑定，以实现表单数据更便捷编辑和表单值的回显
@@ -1771,6 +1804,12 @@ public class EmployeeController {
 
 **使用表单标签的jsp**
 
+springframework提供的表单标签技术：
+
+```jsp
+<%@taglib prefix="form" uri="http://www.springframework.org/tags/form" %>
+```
+
 ```jsp
 <h2>添加员工</h2>
 <!--
@@ -1781,7 +1820,7 @@ public class EmployeeController {
 	path指定的是一个属性: 这个属性是从隐含模型(请求域)中取出的某个对象中的属性;
 	path指定的每一个属性，请求域中必须有一个对象，拥有这个属性:
 		这个对象就是请求域中的Command;
-		modelAttribute=""
+		modelAttribute="" 和之前讲的modelAttribute不同，会从请求域中取值
 		1）以前表单标签会从请求域中获取一个command对象，把这个对象中的每一个属性对应的显示出来
 		2）可以告诉SpringMVC不要去取command的值了，放了一个modelAttribute指定的
 		取对象用的key就用modelAttribute指定的
@@ -1842,6 +1881,179 @@ public class EmployeeController {
 
 
 
+**编辑edit按钮**
+
+```jsp
+<td>
+		<a href="${crud}/emp/${emp.id}">EDIT</a>
+</td>
+```
+
+响应修改按钮的请求，查询出该员工信息，放到请求域中
+
+```java
+	/* 
+	 * get请求查询出当前员工信息
+	 */
+@RequestMapping(value="/emp/{id}", method=RequestMethod.GET)
+	public String getEmp(Model model, @PathVariable("id")Integer id) {
+		Employee employee = employeeDao.get(id);
+		model.addAttribute("employee", employee);
+		//继续查出部门信息放在隐含模型中
+		Collection<Department> departments = departmentDao.getDepartments();
+		model.addAttribute("depts", departments);
+		return "edit";
+}
+```
+
+edit.jsp页面
+
+```jsp
+<%@ page language="java" contentType="text/html; charset=UTF-8"
+    pageEncoding="UTF-8"%>
+<%@taglib prefix="form" uri="http://www.springframework.org/tags/form" %>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Insert title here</title>
+</head>
+<body>
+<%
+ 	pageContext.setAttribute("crud", request.getContextPath());
+ %>
+<h1>员工修改页面</h1>
+<!-- modelAttribute:这个表单的所有内容显示绑定的是请求域中employee的值，不写默认获取command-->
+ <form:form action="${crud}/emp/${employee.id}" 
+ 	method="post" modelAttribute="employee">
+ 	<input type="hidden" name="_method" value="put"/>
+ 	<input type="hidden" name="id" value="${employee.id}"/>
+ 	email:<form:input path="email"/><br/>
+ 	gender:&nbsp;&nbsp;&nbsp;
+ 		男：<form:radiobutton path="gender" value="1"/>&nbsp;&nbsp;&nbsp;
+ 		女：<form:radiobutton path="gender" value="0"/><br/>
+ 	dept:
+ 		<form:select path="department.id" items="${depts}"
+ 			itemLabel="departmentName" itemValue="id"></form:select>
+ 		<br/>
+ 	<input type="submit" value="修改">
+ </form:form>
+</body>
+</html>
+```
+
+响应修改页面信息的请求
+
+```java
+	@RequestMapping(value="/emp/{id}", method=RequestMethod.PUT)
+	public String updateEmp(@ModelAttribute("employee")Employee employee, 		 	@PathVariable("id")Integer id) {
+		System.out.println("要修改的员工："+employee);
+		return "redirect:/emps";
+	}
+```
+
+因为员工的姓名不用修改，因此我们没将员工的姓名带入到edit.jsp页面中，但是这样返回的姓名为空，所以我们可以先将员工放到隐含模型中。
+
+modelAttribute提前查询员工
+
+<font color=red>**当有请求过来时，先响应的是的下面这个隐含模型，然后响应具体的请求。**</font>如果请求中没有带id参数，则输出hh，否则将该id的员工放到隐含模型中。
+
+```java
+	@ModelAttribute
+	public void myModelAttribute(@RequestParam(value="id",required=false)Integer id, Model model) {
+		if(id != null) {
+			Employee employee = employeeDao.get(id);
+			model.addAttribute("employee", employee);
+		}
+		System.out.println("hh");
+		
+	}
+```
+
+
+
 ### 删除员工
 
 ![image-20200630212838447](Spring mvc.assets/image-20200630212838447.png)
+
+删除员工用的是delete请求，点击链接使用的是get请求，需要使用form表单
+
+![image-20200701221847129](Spring mvc.assets/image-20200701221847129.png)
+
+响应删除员工的请求
+
+```java
+@RequestMapping(value="/emp/{id}", method=RequestMethod.DELETE)
+	public String deleteEmp(@PathVariable("id")Integer id) {
+		employeeDao.delete(id);
+		return "redirect:/emps";
+	}
+```
+
+能实现功能，但是删除是一个按钮。
+
+**使用jQuery提交form表单，发送请求**
+
+引入jQuery
+
+```jsp
+<head>
+<meta charset="UTF-8">
+<title>员工列表</title>
+<script type="text/javascript" src="${crud}/scripts/jquery-1.9.1.min.js"></script>
+</head>
+```
+
+![image-20200701222558380](Spring mvc.assets/image-20200701222558380.png)
+
+在springmvc配置文件中添加配置处理静态资源文件的代码
+
+```jsp
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:mvc="http://www.springframework.org/schema/mvc"
+	xsi:schemaLocation="http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc-4.0.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.0.xsd">
+
+	<context:component-scan base-package="com.syc"></context:component-scan>
+	<bean class="org.springframework.web.servlet.view.InternalResourceViewResolver">
+		<property name="prefix" value="/WEB-INF/pages/"></property>
+		<property name="suffix" value=".jsp"></property>
+	</bean>
+	
+	<!-- 默认前端控制器是拦截所有资源（除过jsp)，js文件就404了：要js文件的请求是交给tomcat处理 -->
+	<!-- 告诉SpringMVC，自己映射的请求就自己处理，不能处理的请求直接交给tomcat -->
+	<!-- 静态资源能访问，动态映射的请求就不行 -->
+	<mvc:default-servlet-handler/>
+	<!-- springmvc可以保证动态请求和动态请求都能访问 -->
+	<mvc:annotation-driven></mvc:annotation-driven>
+</beans>
+
+```
+
+为delete按钮添加单击事件delBtn
+
+![image-20200701223941379](Spring mvc.assets/image-20200701223941379.png)
+
+代码：
+
+```jsp
+<form id="deleteForm" action="${crud}/emp/${emp.id}" method="POST">
+		<input type="hidden" name="_method" value="DELETE" /> 
+	</form>
+	<script type="text/javascript">
+		$(function(){
+			$(".delBtn").click(function(){//点击之后执行function回调函数
+				//1.改变表单的action指向，将"deleteForm"表单的action地址改成超链接地址
+				$("#deleteForm").attr("action",this.href);
+				//2.提交表单
+				$("#deleteForm").submit();
+				return false;
+			});
+		});
+	</script>
+```
+
