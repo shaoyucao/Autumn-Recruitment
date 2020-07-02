@@ -918,6 +918,16 @@ public class OutputController {
 
 ![image-20200628100834163](Spring mvc.assets/image-20200628100834163.png)
 
+1.pageScope当前页面有效，在一个jsp页面有效；
+
+2.requestScope在一次请求的全过程有效，从http请求到服务器处理结束，返回响应的整个过程，存放在HttpServletRequest对象中。在这个过程中可以使用forward方式跳转多个jsp。在这些页面里你都可以使用这个变量
+
+3.Session是用户全局变量，在整个会话期间都有效。只要页面不关闭就一直有效（或者直到用户一直未活动导致会话过期，默认session过期时间为30分钟，或调用HttpSession的invalidate()方法）。存放在HttpSession对象中 
+
+4.application是程序全局变量，对每个用户每个页面都有效。存放在ServletContext对象中。它的存活时间是最长的，如果不进行手工删除，它们就一直可以使用 
+
+
+
 **编写响应处理**
 
 ```java
@@ -2057,3 +2067,218 @@ modelAttribute提前查询员工
 	</script>
 ```
 
+## 九、数据绑定
+
+数据绑定流程
+
+![image-20200702103508998](Spring mvc.assets/image-20200702103508998.png)
+
+### 自定义类型转换
+
+将字符串转换成employee对象
+
+```jsp
+<form action="${crud}/quickadd">
+		<input name="empinfo" value="empAdmin-admin@qq.com-1-101"/>
+		<input type="submit" value="快速添加"/>
+</form>
+```
+
+编写响应请求
+
+```java
+@RequestMapping(value="/quickadd")
+	public String quickAdd(@RequestParam("empinfo")Employee employee) {
+		System.out.println("封装："+employee);
+		employeeDao.save(employee);
+		return "redirect:/emps";
+		
+}
+```
+
+因为此时拿到的是String类型，所以需要进行类型转换
+
+编写自定义类型转换器
+
+```java
+package com.syc.component;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.convert.converter.Converter;
+
+import com.syc.bean.Employee;
+import com.syc.dao.DepartmentDao;
+
+public class MyStringToEmployee implements Converter<String, Employee>{
+	
+	@Autowired
+	DepartmentDao departmentDao;
+
+	//empAdmin-admin@qq.com-1-101
+	@Override
+	public Employee convert(String source) {
+		System.out.println("要转化的字符串"+source);
+		Employee employee = new Employee();
+		if(source.contains("-")) {
+			String[] split = source.split("-");
+			employee.setLastName(split[0]);
+			employee.setEmail(split[1]);
+			employee.setGender(Integer.parseInt(split[2]));
+			employee.setDepartment(departmentDao.getDepartment(Integer.parseInt(split[3])));
+		}
+		return employee;
+	}
+
+}
+
+```
+
+SpringMVC配置文件中配置
+
+```xml
+<!-- 使用自己配置的类型转换组件 -->
+	<mvc:annotation-driven conversion-service="conversionService"></mvc:annotation-driven>
+	
+	<!--告诉SpringMVS别用默认的ConversionService,
+		而用我自定义的ConversionService.可能有我们自定义的Converter: -->
+	<bean id="conversionService" class= "org.springframework.context.support.ConversionServiceFactoryBean">
+		<!--converters转换器中添加我们自定义的类型转换器-->
+		<property name="converters">
+			<set>
+				<bean class="com.syc.component.MyStringToEmployee"></bean>
+			</set>
+		</property>
+	</bean>
+```
+
+总结三步：
+
+1、实现Converter接口，做一个自定义类型的转换器
+
+2、将这个Converter配置在ConversionService中
+
+3、告诉SpringMVC使用这个ConversionService
+
+### annotation-driven
+
+- 配置文件中写入<mvc:annotation-driven />后，会自动注册
+  RequestMappingHandlerMapping、RequestMappingHandlerAdapter与ExceptionHandlerExceptionResolver三个bean。
+- 还将提供以下支持:
+  - 支持使用ConversionService 实例对表单参数进行类型转换
+  - 支持使用@NumberFormat annnotation、 @DateTimeFormat注解完成数据类型的格式化
+  - 支持使用@Valid注解对JavaBean实例进行 JSR303验证
+  - 支持使用@RequestBody和@ResponseBody注解
+
+**mvc : annotation-driven的强大功能**
+
+1、只要请求不好使就召唤mvc : annotation- driven;
+ 配置< mvc:default-servlet-handler/>  < mvc :annotation-driven/>现象:
+1)、都没配? 动态资源 @RequestMapping映射的资源能访问，静态资源(.html,.js,.img) 无法访问
+
+> 动态能访问：Defaul tAnnotat ionHandlerMapping中的handlerMap中保存了每一个资源的映射信息
+> 静态不能访问：就是handlerMap中没有保存静态资源映射的请求，HandlerAdapter:方法执行的适配器。AnnotationMethodHandlerAdapter ：帮我们执行目标方法；过时的;
+
+2)、加上<mvc :default-servlet -handler/>, <mvc: annotation-driven/> , 不加静态资源ok，动态资源完蛋
+
+> Defaul tAnnotat ionHandlerMapping没有了，用SimpleUrlHandlerMapping替换了，它的作用就是将所有请求直接交给tomcat
+
+3)、加上< mvc:default-servlet-handler/>, 并加上< mvc:annotation-driven/>;才都能访问
+
+> SimpleUrlHandlerMapping：将请求直接交给tomcat，静态资源没问题
+>
+> RequestMappingHandlerMapping：动态资源可以访问；handleMethods属性保存了每一个请求用哪个方法来处理
+
+### SpringMVC支持ajax
+
+**1.导包**
+
+jackson-annotations-2.1.5.jar
+jackson-core-2.1.5.jar
+jackson-databind-2.1.5.jar
+
+**2.编写响应**
+
+```java
+package com.syc.controller;
+
+import java.util.Collection;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
+
+import com.syc.bean.Employee;
+import com.syc.dao.EmployeeDao;
+
+@Controller
+public class AjaxTestController {
+
+	@Autowired
+	EmployeeDao employeeDao;
+	
+	/**
+	 * 将返回的数据放在响应体中:
+		如果是对象，jackson包自动将对象转为json格式
+	 * @return
+	 */
+	@ResponseBody
+	@RequestMapping("/getallajax")
+	public Collection<Employee> ajaxGetAll(){
+		Collection<Employee> all = employeeDao.getAll();
+		return all;
+		
+	}
+}
+
+```
+
+发送getallajax请求时，直接返回json格式
+
+![image-20200702133132563](Spring mvc.assets/image-20200702133132563.png)
+
+
+
+ajax获取所有员工
+
+```jsp
+<%@ page language="java" contentType="text/html; charset=UTF-8"
+    pageEncoding="UTF-8" import="java.util.Date"%>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Insert title here</title>
+<%
+	pageContext.setAttribute("ctp", request.getContextPath());
+%>
+<script type="text/javascript" src="scripts/jquery-1.9.1.min.js"></script>
+</head>
+<body>
+<%=new Date() %>
+<a href="${ctp}/getallajax">ajax获取所有员工</a>
+<div>
+
+</div>
+<script type="text/javascript">
+	$("a:first").click(function(){
+		//1.发送ajax获取所有员工
+		$.ajax({
+			url:"${ctp}/getallajax",
+			type:"GET",
+			success:function(data){
+				console.log(data);
+				$.each(data,function(){
+					var empInfo = this.lastName +"-->"+this.gender+"-->"+this.email;
+					$("div").append(empInfo+"<br/>");
+				})
+			}
+		});
+		return false;//禁用默认的点击链接跳转的行为
+	});
+</script>
+</body>
+</html>
+```
+
+![image-20200702142727615](Spring mvc.assets/image-20200702142727615.png)
