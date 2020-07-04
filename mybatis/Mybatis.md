@@ -923,7 +923,7 @@ package标签用于指定要配置别名的包，当指定之后，该包下的*
     </mappers>
 ```
 
-## 六、连接池
+## 六、连接池、动态SQL
 
 ![image-20200703222649692](Mybatis.assets/image-20200703222649692.png)
 
@@ -955,3 +955,602 @@ mybatis连接池提供了3种方式的配置：
 - JNDI 采用服务器提供的JNDI技术实现，来获取DataSource对象，不同的服务器所能拿到DataSource是不一样。
 
   注意：如果不是web或者maven的war工程，是不能使用的。我们使用的是tomcat服务器，采用的连接池是dbcp连接池。
+
+使用POOLED属性和UNPOOLED属性的区别
+
+**使用POOLED**
+
+![image-20200704095833513](Mybatis.assets/image-20200704095833513.png)
+
+**使用UNPOOLED**
+
+![image-20200704095710254](Mybatis.assets/image-20200704095710254.png)
+
+使用POOLED属性相比于UNPOOLED属性多了 created connection和returned connection的步骤，即从连接池中获取连接
+
+### 3.事务的自动提交
+
+Mybatis设置事务自动提交（日常用的不多，如转账事务是不能自动提交的）
+
+![image-20200704103147485](Mybatis.assets/image-20200704103147485.png)
+
+设置好后保存用户，就少了自动提交的步骤
+
+![image-20200704103650765](Mybatis.assets/image-20200704103650765.png)
+
+### 4.动态sql语句
+
+#### if标签
+
+需求：根据姓名进行动态sql语句查询 
+
+Dao中添加方法：
+
+```java
+	/**
+     * 根据传入参数条件
+     * @param user
+     * @return
+     */
+    List<User> findUserByCondition(User user);
+```
+
+映射配置文件根据条件进行查询
+
+```xml
+	<!--根据条件查询-->
+    <select id="findUserByCondition" parameterType="user" resultType="user">
+        select * from user where 1=1
+        <if test="username != null">
+            and username = #{username}
+        </if>
+    </select>
+```
+
+在上面的查询语句中使用where 1=1方便进行动态sql语句的拼接
+
+测试方法
+
+```java
+@Test
+    public void testFindByCondition(){
+        User u = new User();
+        u.setUsername("老王");
+
+        List<User> users = userDao.findUserByCondition(u);
+        for(User user : users){
+            System.out.println(user);
+        }
+    }
+```
+
+#### where标签
+
+在使用where标签下可省略where 1 = 1条件
+
+```xml
+<!--根据条件查询-->
+    <select id="findUserByCondition" parameterType="user" resultType="user">
+        select * from user
+        <where>
+            <if test="username != null">
+                and username = #{username}
+            </if>
+            <if test="sex != null">
+                and sex = #{sex}
+            </if>
+        </where>
+    </select>
+```
+
+#### foreach标签
+
+如何实现查询select * from user where id in {41, 42, 43};
+
+**QueryVo中编写一个list集合**
+
+```java
+package com.syc.model;
+
+import java.util.List;
+
+public class QueryVo {
+    private User user;
+    private List<Integer> ids;
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
+    }
+
+    public List<Integer> getIds() {
+        return ids;
+    }
+
+    public void setIds(List<Integer> ids) {
+        this.ids = ids;
+    }
+}
+
+```
+
+在UserDao中添加方法
+
+```java
+/**
+     * 根据queryvo中提供的id集合，查询用户信息
+     * @param vo
+     * @return
+     */
+    List<User> findUserInIds(QueryVo vo);
+```
+
+在映射文件中做配置
+
+使用foreach标签，collection的值为对应的queryVo中的list集合
+
+```xml
+<!--根据queryvo中的Id集合实现查询用户列表-->
+    <select id="findUserInIds" resultType="user" parameterType="queryVo">
+        select * from user
+        <where>
+            <if test="ids != null and ids.size()>0">
+                <foreach collection="ids" open="and id in(" close=")" item="uid" separator=",">
+                    #{uid}
+                </foreach>
+            </if>
+        </where>
+    </select>
+```
+
+编写测试方法
+
+```java
+/**
+     * 更具queryVo的list集合查询所有的用户
+     */
+    @Test
+    public void testfindUserInIds(){
+        QueryVo vo = new QueryVo();
+        List<Integer> list = new ArrayList<>();
+        list.add(41);
+        list.add(42);
+        list.add(43);
+        vo.setIds(list);
+        List<User> users = userDao.findUserInIds(vo);
+        for(User user : users){
+            System.out.println(user);
+        }
+    }
+```
+
+
+
+#### sql标签
+
+sql标签可以抽取出重复的sql语句，在映射文件中做如下的配置修改
+
+```xml
+    <!--抽取重复的sql语句-->
+    <sql id="defaultUser">
+        select * from user
+    </sql>
+
+    <!--配置查询所有，用include将抽取的sql语句引入-->
+    <select id="findAll" resultType="user">
+        <include refid="defaultUser"></include>
+    </select>
+```
+
+## 七、MyBatis多表查询
+
+### 1.mybatis中的多表查询介绍
+​	表之间的关系有几种：
+​			一对多
+​			多对一
+​			一对一
+​			多对多
+​	举例：
+
+- 用户和订单就是一对多
+  订单和用户就是多对一
+  		一个用户可以下多个订单
+  		多个订单属于同一个用户
+
+- 人和身份证号就是一对一
+
+  ​		一个人只能有一个身份证号
+  ​		一个身份证号只能属于一个人
+
+- 老师和学生之间就是多对多
+
+  ​		一个学生可以被多个老师教过
+  ​		一个老师可以教多个学生
+
+  特例：
+  	如果拿出每一个订单，他都只能属于一个用户。
+  	所以Mybatis就把多对一看成了一对一。
+
+### 2.mybatis中的多表查询步骤
+
+示例：用户和账户
+			一个用户可以有多个账户
+			一个账户只能属于一个用户（多个账户也可以属于同一个用户）
+		步骤：
+			1、建立两张表：用户表，账户表
+				让用户表和账户表之间具备一对多的关系：需要使用外键在账户表中添加
+			2、建立两个实体类：用户实体类和账户实体类
+				让用户和账户的实体类能体现出来一对多的关系
+			3、建立两个配置文件
+				用户的配置文件
+				账户的配置文件
+			4、实现配置：
+				当我们查询用户时，可以同时得到用户下所包含的账户信息
+				当我们查询账户时，可以同时得到账户的所属用户信息
+
+### 3.一对一 使用继承查询多表数据（不常用）
+
+下面的例子演示为：**一个Account银行卡号对应一个User**，现要查询出Account表和User表中的关联数据
+
+**编写AccountUser类继承Account**
+
+```java
+package com.syc.model;
+
+public class AccountUser extends Account {
+    private String username;
+    private String address;
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public void setAddress(String address) {
+        this.address = address;
+    }
+
+    @Override
+    public String toString() {
+        return super.toString() + "          AccountUser{" +
+                "username='" + username + '\'' +
+                ", address='" + address + '\'' +
+                '}';
+    }
+}
+
+```
+
+**AccountDao中添加方法**
+
+```java
+/**
+ * 查询所有账户，并且带有用户名称和地址信息
+ */
+List<AccountUser> findAllAccount();
+```
+
+**编辑映射文件**
+
+```xml
+<!--多表查询-->
+<select id="findAllAccount" resultType="accountuser">
+       select a.*, u.username, u.address from user u, account a where u.id = a.uid;
+</select>
+```
+
+**添加测试方法**
+
+```java
+@Test
+    public void testFindAllAccountUser(){
+        List<AccountUser> aus = accountDao.findAllAccount();
+        for(AccountUser au : aus){
+            System.out.println(au);
+        }
+    }
+```
+
+### 4.建立实体类关系的方式
+
+Account中封装User对象
+
+```java
+ 	//从表实体应该包含一个主表实体的对象引用
+    private User user;
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
+    }
+```
+
+定义封装account和user的resultMap
+
+```xml
+<!--定义封装account和user的resultMap-->
+    <resultMap id="accountUserMap" type="account">
+        <id property="id" column="aid"></id>
+        <result property="uid" column="uid"></result>
+        <result property="money" column="money"></result>
+        <!--一对一的关系映射，配置封装user的内容-->
+        <association property="user" column="uid" javaType="com.syc.model.User">
+            <id property="id" column="id"></id>
+            <result property="username" column="username"></result>
+            <result property="address" column="address"></result>
+            <result property="sex" column="sex"></result>
+            <result property="birthday" column="birthday"></result>
+        </association>
+    </resultMap>
+    <!--配置查询所有-->
+    <select id="findAll"  resultMap="accountUserMap">
+        select u.*, a.id aid, a.uid, a.money from user u, account a;
+    </select>
+```
+
+上面的resultMap将结果封装到account中，其中的association与User对象关联
+
+**添加测试方法**
+
+```java
+@Test
+    public void testFindAll() {
+        //5.使用代理对象执行方法
+        List<Account> accounts = accountDao.findAll();
+        for(Account account : accounts){
+            System.out.println(account);
+            System.out.println(account.getUser());
+        }
+    }
+```
+
+![image-20200704165524917](Mybatis.assets/image-20200704165524917.png)
+
+### 5.一对多查询操作
+
+在user中封装accounts集合
+
+```java
+	//一对多关系映射，主表实体包含从表实体的集合引用
+    private List<Account> accounts;
+
+    public List<Account> getAccounts() {
+        return accounts;
+    }
+
+    public void setAccounts(List<Account> accounts) {
+        this.accounts = accounts;
+    }
+```
+
+userDao中获取所有用户的方法不变
+
+```java
+	/**
+     * 查询所有用户，同时获取到用户下所有账户的信息
+     * @return
+     */
+    List<User> findAll();
+```
+
+映射文件的配置
+
+```xml
+<!--定义User的resultMap-->
+    <resultMap id="userAccountMap" type="user">
+        <id property="id" column="id"></id>
+        <result property="username" column="username"></result>
+        <result property="address" column="address"></result>
+        <result property="sex" column="sex"></result>
+        <result property="birthday" column="birthday"></result>
+        <!--配置user对象中accounts集合的映射-->
+        <collection property="accounts" ofType="account">
+            <id column="aid" property="id"></id>
+            <result column="uid" property="uid"></result>
+            <result column="money" property="money"></result>
+        </collection>
+    </resultMap>
+    <!--配置查询所有-->
+    <select id="findAll" resultMap="userAccountMap">
+        select * from user u left outer join account a on u.id = a.uid;
+    </select>
+```
+
+测试查询所有用户的方法
+
+```java
+	/**
+     * 测试查询所有
+     */
+    @Test
+    public void testFindAll() {
+        //5.使用代理对象执行方法
+        List<User> users = userDao.findAll();
+        for(User user : users){
+            System.out.println("------每个用户的信息------");
+            System.out.println(user);
+            System.out.println(user.getAccounts());
+        }
+    }
+```
+
+![image-20200704192647519](Mybatis.assets/image-20200704192647519.png)
+
+没有账户信息的为空集
+
+### 6.多对多关系
+
+**实际上下面写了两个一对多的案例**
+
+示例：用户和角色
+			一个用户可以有多个角色
+			一个角色可以赋予多个用户
+步骤：
+	1、建立两张表：用户表，角色表
+		 让用户表和角色表具有多对多的关系。需要使用中间表，中间表中包含各自的主键，在中间表中是外键。
+	2、建立两个实体类：用户实体类和角色实体类
+		 让用户和角色的实体类能体现出来多对多的关系
+		 各自包含对方一个集合引用
+	3、建立两个配置文件
+		 用户的配置文件
+		 角色的配置文件
+	4、实现配置：
+		  当我们查询用户时，可以同时得到用户所包含的角色信息
+		  当我们查询角色时，可以同时得到角色的所赋予的用户信息
+
+**（1）由角色获取用户**
+
+**对于角色Role而言，一个角色可以对应多个用户，一个角色也可以没有用户和它对应**
+
+比如查询角色表中id为1,2,3 所对应的用户信息
+
+![image-20200704205040715](Mybatis.assets/image-20200704205040715.png)
+
+在Role实体类中加入User集合
+
+```java
+private List<User> users;
+
+    public List<User> getUsers() {
+        return users;
+    }
+
+    public void setUsers(List<User> users) {
+        this.users = users;
+    }
+```
+
+修改RoleDao.xml映射文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.syc.dao.RoleDao">
+
+    <!--定义Role的resultMap-->
+    <resultMap id="roleMap" type="role">
+        <id property="id" column="rid"></id>
+        <result property="rolename" column="role_name"></result>
+        <result property="roledesc" column="role_desc"></result>
+        <collection property="users" ofType="user">
+            <id column="id" property="id"></id>
+            <result column="username" property="username"></result>
+            <result column="address" property="address"></result>
+            <result column="sex" property="sex"></result>
+            <result column="birthday" property="birthday"></result>
+        </collection>
+    </resultMap>
+
+    <select id="findAll" resultMap="roleMap">
+        select u.*,r.id as rid,r.role_name,r.role_desc from role r
+         left outer join user_role ur  on r.id = ur.rid
+         left outer join user u on u.id = ur.uid
+    </select>
+
+</mapper>
+```
+
+**测试方法**
+
+```java
+@Test
+public void testFindAll(){
+    List<Role> roles = roleDao.findAll();
+    for(Role role : roles){
+        System.out.println(role);
+        System.out.println(role.getUsers());
+    }
+
+}
+```
+
+**输出**
+
+![image-20200704205253583](Mybatis.assets/image-20200704205253583.png)
+
+**（2）由用户获取角色**
+
+主要修改查询语句
+
+```sql
+select u.*,r.id as rid,r.role_name,r.role_desc from user u
+         left outer join user_role ur  on u.id = ur.uid
+         left outer join role r on r.id = ur.rid
+```
+
+在用户中封装角色列表
+
+```java
+private List<Role> roles;
+
+    public List<Role> getRoles() {
+        return roles;
+    }
+
+    public void setRoles(List<Role> roles) {
+        this.roles = roles;
+    }
+```
+
+修改用户的映射文件
+
+```xml
+<!-- 定义User的resultMap-->
+    <resultMap id="userMap" type="user">
+        <id property="id" column="id"></id>
+        <result property="username" column="username"></result>
+        <result property="address" column="address"></result>
+        <result property="sex" column="sex"></result>
+        <result property="birthday" column="birthday"></result>
+        <!-- 配置角色集合的映射 -->
+        <collection property="roles" ofType="role">
+            <id property="roleId" column="rid"></id>
+            <result property="roleName" column="role_name"></result>
+            <result property="roleDesc" column="role_desc"></result>
+        </collection>
+    </resultMap>
+
+    <!-- 查询所有 -->
+    <select id="findAll" resultMap="userMap">
+        select u.*,r.id as rid,r.role_name,r.role_desc from user u
+         left outer join user_role ur  on u.id = ur.uid
+         left outer join role r on r.id = ur.rid
+    </select>
+```
+
+测试查询所有用户的方法
+
+```java
+	/**
+     * 测试查询所有
+     */
+    @Test
+    public void testFindAll() {
+        //5.使用代理对象执行方法
+        List<User> users = userDao.findAll();
+        for(User user : users){
+            System.out.println("------每个用户的信息------");
+            System.out.println(user);
+            System.out.println(user.getRoles());
+        }
+    }
+```
+
+打印输出
+
+![image-20200704210456324](Mybatis.assets/image-20200704210456324.png)
