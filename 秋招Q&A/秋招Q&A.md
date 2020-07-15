@@ -548,6 +548,8 @@ public class CoffeeBar {
 
 ```
 
+
+
 ### 装饰者模式在JDK中的应用
 
 在JDK的源码中，InputStream使用的就是装饰者模式，其中InputString是抽象类（如Drink类），FilterInputStream是装饰者（如上面的Decorator），DataInputStream是FilterInputStream的子类（如上面的Milk）
@@ -559,7 +561,248 @@ public class CoffeeBar {
 
 ![image-20200709232019478](images/image-20200709232019478.png)
 
-### 4.观察者模式
+### 4.代理模式
+
+### 代理模式-静态代理
+
+静态代理在使用时，需要定义接口或者父类，被代理对象与代理对象需要一起实现相同的接口或者是继承相同的父类。
+
+案例：教师教书，在teach()方法前后分别做额外的处理
+
+类图如下：
+
+
+
+接口：
+
+```java
+public interface ITeacherDao {
+    public void teach();
+}
+```
+
+实现类：
+
+```java
+public class TeacherDao implements ITeacherDao {
+
+    @Override
+    public void teach() {
+        System.out.println("教师教书");
+    }
+}
+```
+
+代理类：
+
+```java
+public class TeacherDaoProxy implements ITeacherDao {
+
+    private ITeacherDao teacherDao;
+
+    public TeacherDaoProxy(ITeacherDao teacherDao) {
+        this.teacherDao = teacherDao;
+    }
+
+    @Override
+    public void teach() {
+        System.out.println("前处理");
+        teacherDao.teach();
+        System.out.println("后处理");
+    }
+}
+```
+
+客户端测试类：
+
+```java
+public class Client {
+    public static void main(String[] args) {
+        //创建目标对象
+        TeacherDao teacherDao = new TeacherDao();
+
+        //创建代理对象
+        TeacherDaoProxy teacherDaoProxy = new TeacherDaoProxy(teacherDao);
+
+        teacherDaoProxy.teach();
+    }
+}
+```
+
+![image-20200712153406726](秋招Q&A.assets/image-20200712153406726.png)
+
+缺点：一旦接口中增加方法，目标对象与代理对象都要维护
+
+### 代理模式-动态代理
+
+1）在动态代理中，代理对象不需要实现接口，但是目标对象要实现接口，否则不能用动态代理
+
+2）代理对象的生成，利用JDK中的反射机制，动态的在内存中构建代理对象
+
+3）JDK实现代理只需要使用newProxyInstance方法，需要接收三个参数：
+
+ClassLoader、Interfaces 以及InvocationHandler
+
+接口：
+
+```java
+public interface ITeacherDao {
+    public void teach();
+}
+```
+
+实现类：
+
+```java
+public class TeacherDao implements ITeacherDao {
+    @Override
+    public void teach() {
+        System.out.println("教师教书中");
+    }
+}
+```
+
+**代理工厂类：**
+
+```java
+public class ProxyFactory {
+
+    private Object target;
+
+    public ProxyFactory(Object target) {
+        this.target = target;
+    }
+
+    public Object getProxyInstance(){
+        return Proxy.newProxyInstance(target.getClass().getClassLoader(),target.getClass().getInterfaces(), new InvocationHandler() {
+            @Override
+            public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                System.out.println("处理前");
+                Object invokeVal = method.invoke(target, args);
+                System.out.println("处理后");
+                return invokeVal;
+            }
+        });
+    }
+}
+```
+
+客户端测试类：
+
+```java
+public class Client {
+    public static void main(String[] args) {
+        //创建目标对象
+        ITeacherDao teacherDao = new TeacherDao();
+
+        //创建代理对象
+        ProxyFactory proxyFactory = new ProxyFactory(teacherDao);
+
+        ITeacherDao instance = (ITeacherDao) proxyFactory.getProxyInstance();
+        instance.teach();
+    }
+}
+```
+
+### 代理模式-Cglib
+
+Cglib代理也叫作子类代理，不需要实现某个类。
+
+目标类：
+
+```java
+package com.atguigu.proxy.cglib;
+
+public class TeacherDao {
+
+	public void teach() {
+		System.out.println(" 老师授课中  ， 我是cglib代理，不需要实现接口 ");
+	}
+}
+
+```
+
+代理工厂类：
+
+实现MethodInterceptor接口，重写intercept方法
+
+```java
+package com.atguigu.proxy.cglib;
+
+import java.lang.reflect.Method;
+
+import net.sf.cglib.proxy.Enhancer;
+import net.sf.cglib.proxy.MethodInterceptor;
+import net.sf.cglib.proxy.MethodProxy;
+
+public class ProxyFactory implements MethodInterceptor {
+
+	//维护一个目标对象
+	private Object target;
+	
+	//构造器，传入一个被代理的对象
+	public ProxyFactory(Object target) {
+		this.target = target;
+	}
+
+	//返回一个代理对象:  是 target 对象的代理对象
+	public Object getProxyInstance() {
+		//1. 创建一个工具类
+		Enhancer enhancer = new Enhancer();
+		//2. 设置父类
+		enhancer.setSuperclass(target.getClass());
+		//3. 设置回调函数
+		enhancer.setCallback(this);
+		//4. 创建子类对象，即代理对象
+		return enhancer.create();
+		
+	}
+	
+
+	//重写  intercept 方法，会调用目标对象的方法
+	@Override
+	public Object intercept(Object arg0, Method method, Object[] args, MethodProxy arg3) throws Throwable {
+		System.out.println("Cglib代理模式 ~~ 开始");
+		Object returnVal = method.invoke(target, args);
+		System.out.println("Cglib代理模式 ~~ 提交");
+		return returnVal;
+	}
+
+}
+
+```
+
+客户端测试类：
+
+```java
+package com.atguigu.proxy.dynamic;
+
+public class Client {
+
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		//创建目标对象
+		ITeacherDao target = new TeacherDao();
+		
+		//给目标对象，创建代理对象, 可以转成 ITeacherDao
+		ITeacherDao proxyInstance = (ITeacherDao)new ProxyFactory(target).getProxyInstance();
+	
+		// proxyInstance=class com.sun.proxy.$Proxy0 内存中动态生成了代理对象
+		System.out.println("proxyInstance=" + proxyInstance.getClass());
+		
+		//通过代理对象，调用目标对象的方法
+		//proxyInstance.teach();
+		
+		proxyInstance.sayHello(" tom ");
+	}
+
+}
+
+```
+
+
+
+### 5.观察者模式
 
 观察者模式用于定义对象间的一种一对多的依赖关系，当一个对象的状态发生改变时，所有依赖于它的对象都得到通知并被自动更新。当对象间存在一对多关系时，则使用观察者模式（Observer Pattern）。比如，当一个对象被修改时，则会自动通知依赖它的对象。观察者模式属于行为型模式。
 
@@ -746,3 +989,174 @@ JDK中的Observable类就使用了观察者模式
 ![image-20200710094721172](images/image-20200710094721172.png)
 
 若我们需要使用观察者模式，可以直接将某个类继承自Observable类。
+
+### 6.模板方法模式
+
+**模板方法模式简介**
+
+1）模板方法模式(Template Method Pattern)，又叫模板模式(Template Pattern)，在一个抽象类公开定义了执行它的方法的模板。它的子类可以按需要重写方法实现，但调用将以抽象类中定义的方式进行。
+2）简单说， 模板方法模式定义一个操作中的算法的骨架，而将一些**步骤延迟到子类**中，使得子类可以不改变一个算法的结构，就可以重定义该算法的某些特定步骤
+3）这种类型的设计模式属于行为型模式。
+
+以读书这个操作为例，读书的操作有读书前准备，开始读选好的书，读书后，三个步骤，前后两个步骤对于不同的书的操作都是一样的，只有中间阅读的书不一样。
+
+**具体代码：**
+
+书本类
+
+```java
+package test.design.template;
+
+public abstract class Book {
+
+   final void readBookStart(){
+        prepare();
+        readBook();
+        endRead();
+    }
+
+    void prepare(){
+        System.out.println("读书前的准备");
+    }
+
+    abstract void readBook();
+
+    void endRead(){
+        System.out.println("结束阅读");
+    }
+}
+```
+
+西游类：
+
+```java
+package test.design.template;
+
+public class XiYouBook extends Book{
+
+
+    @Override
+    void readBook() {
+        System.out.println("读西游记");
+    }
+}
+
+```
+
+红楼类：
+
+```java
+package test.design.template;
+
+public class HongLouBook extends Book {
+    @Override
+    void readBook() {
+        System.out.println("读红楼");
+    }
+}
+
+```
+
+客户端：
+
+```java
+package test.design.template;
+
+public class Client {
+    public static void main(String[] args) {
+        System.out.println("-----开始读西游戏喽------");
+        Book xiYou = new XiYouBook();
+        xiYou.readBookStart();
+
+        System.out.println("-----开始读红楼梦喽------");
+        Book hongLou = new HongLouBook();
+        hongLou.readBookStart();
+    }
+}
+
+```
+
+### 模板方法模式中的钩子方法
+
+在模板方法模式的父类中，我们可以定义一个方法，它默认不做任何事，子类可以视情况要不要覆盖它，该方法称为“钩子”。
+
+在上述的案例中，如果我们想省略掉中间一步选书的过程，那么可以按照下面的代码实现
+
+在父类中添加是否需要选书的方法，并且默认返回true表示要选书
+
+```java
+package test.design.template;
+
+public abstract class Book {
+
+   final void readBookStart(){
+        prepare();
+        if(needSelectBook()){
+            readBook();
+        }
+        endRead();
+    }
+
+    void prepare(){
+        System.out.println("读书前的准备");
+    }
+
+    abstract void readBook();
+
+    void endRead(){
+        System.out.println("结束阅读");
+    }
+
+    boolean needSelectBook(){
+        return true;
+    }
+}
+
+```
+
+若我们需要选书，则重写其中的是否需要选书的方法，并返回false
+
+```java
+package test.design.template;
+
+public class PureBook extends Book {
+
+    @Override
+    void readBook() {
+    }
+
+    boolean needSelectBook(){
+        return false;
+    }
+}
+
+```
+
+客户端实现
+
+```java
+package test.design.template;
+
+public class Client {
+    public static void main(String[] args) {
+        System.out.println("-----开始读西游戏喽------");
+        Book xiYou = new XiYouBook();
+        xiYou.readBookStart();
+
+        System.out.println("-----开始读红楼梦喽------");
+        Book hongLou = new HongLouBook();
+        hongLou.readBookStart();
+
+        System.out.println("-----读空书-------");
+        Book pureBook = new PureBook();
+        pureBook.readBookStart();
+    }
+}
+
+```
+
+![image-20200715185925371](秋招Q&A.assets/image-20200715185925371.png)
+
+### 模板方法方式在Spring IOC 中的应用
+
+![image-20200715191506293](秋招Q&A.assets/image-20200715191506293.png)
